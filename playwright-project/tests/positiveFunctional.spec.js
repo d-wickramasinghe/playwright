@@ -1,4 +1,4 @@
-const { test } = require('@playwright/test');
+const { test, expect } = require('@playwright/test');
 
 const APP_URL = 'https://www.swifttranslator.com/';
 
@@ -8,7 +8,11 @@ async function openApp(page) {
 }
 
 async function getInputLocator(page) {
-  return page.getByRole('textbox', { name: /input your singlish text here/i });
+  return page.getByPlaceholder('Input Your Singlish Text Here.');
+}
+
+async function getOutputLocator(page) {
+  return page.getByText('Sinhala', { exact: true }).locator('xpath=following-sibling::*[1]');
 }
 
 function logResult({ id, input, expected, actual, status }) {
@@ -16,36 +20,20 @@ function logResult({ id, input, expected, actual, status }) {
 }
 
 async function assertAndLogPositive({ id, input, expected, inputLocator, page }) {
-  let actual = '';
-  let status = 'Fail';
-
-  try {
-    await inputLocator.fill('');
-    await page.waitForTimeout(500);
-    await inputLocator.fill(input, { delay: 30 });
-    
-    // Wait for output to appear
-    let found = false;
-    const startTime = Date.now();
-    while (Date.now() - startTime < 8000 && !found) {
-      const allElements = await page.locator('div, span').all();
-      for (const elem of allElements) {
-        const text = await elem.textContent().catch(() => '');
-        if (text && text.includes(expected.substring(0, 5))) {
-          actual = text.substring(0, 100);
-          found = true;
-          break;
-        }
-      }
-      if (!found) await page.waitForTimeout(300);
-    }
-    
-    status = actual.length > 0 ? 'Pass' : 'Fail';
-  } catch (err) {
-    console.error(`Test ${id} error:`, err.message);
-  } finally {
-    logResult({ id, input, expected, actual, status });
-  }
+  const outputArea = await getOutputLocator(page);
+  
+  await inputLocator.fill(input);
+  await page.waitForTimeout(2000);
+  
+  await expect(outputArea).not.toHaveText('');
+  const actualOutput = (await outputArea.textContent()) ?? '';
+  
+  const passed = actualOutput.trim() === expected.trim();
+  const status = passed ? 'Pass' : 'Fail';
+  
+  logResult({ id, input, expected, actual: actualOutput.trim(), status });
+  
+  expect(actualOutput.trim()).toBe(expected.trim());
 }
 
 test("Pos_Fun_0001 | Convert technical abbreviations in a sentence", async ({ page }) => {
@@ -67,7 +55,7 @@ test("Pos_Fun_0002 | Convert currency with decimal points", async ({ page }) => 
 
   await assertAndLogPositive({
     id: 'Pos_Fun_0002',
-    input: `Rs. 1500.50 kiyadha?`,
+    input: `Rs. 1500.50 kiiyadha?`,
     expected: `Rs. 1500.50 කීයද?`,
     inputLocator: input,
     page,
@@ -93,7 +81,7 @@ test("Pos_Fun_0004 | Mixed English word inside complex Sinhala sentence", async 
 
   await assertAndLogPositive({
     id: 'Pos_Fun_0004',
-    input: `oyaa enavaanam mama meeting ekata yanne naee.`,
+    input: `oyaa enavaanam mama meeting ekata yannee naee.`,
     expected: `ඔයා එනවානම් මම meeting එකට යන්නේ නෑ.`,
     inputLocator: input,
     page,
@@ -145,7 +133,7 @@ test("Pos_Fun_0008 | Date formats in a sentence", async ({ page }) => {
 
   await assertAndLogPositive({
     id: 'Pos_Fun_0008',
-    input: `party eka 25/12/2025 thiyenne.`,
+    input: `party eka 25/12/2025 thiyennee.`,
     expected: `party එක 25/12/2025 තියෙන්නේ.`,
     inputLocator: input,
     page,
@@ -171,7 +159,7 @@ test("Pos_Fun_0010 | Verbs with different suffixes (Past Tense)", async ({ page 
 
   await assertAndLogPositive({
     id: 'Pos_Fun_0010',
-    input: `mama iiye kaeema kaeevaa.`,
+    input: `mama iiyee kaeema kaeevaa.`,
     expected: `මම ඊයේ කෑම කෑවා.`,
     inputLocator: input,
     page,
@@ -236,7 +224,7 @@ test("Pos_Fun_0015 | Question with multiple options", async ({ page }) => {
 
   await assertAndLogPositive({
     id: 'Pos_Fun_0015',
-    input: `oyaata oone tea dha koopi dha?`,
+    input: `oyaata oonee tea dha koopi dha?`,
     expected: `ඔයාට ඕනේ tea ද කෝපි ද?`,
     inputLocator: input,
     page,
